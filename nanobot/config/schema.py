@@ -222,6 +222,15 @@ class NapCatConfig(Base):
     handle_request_events: bool = False  # Handle request events (friend/group requests)
     auto_approve_friend: bool = False  # Auto approve friend requests (use with caution)
 
+    # Message debounce configuration
+    message_debounce_enabled: bool = True  # Enable message debouncing
+    message_debounce_seconds: float = 5  # Debounce delay in seconds
+    message_debounce_max_messages: int = 50  # Buffer size limit
+
+    # Human-like typing simulation
+    typing_delay_min: float = 0.2  # Minimum delay between message segments (seconds)
+    typing_delay_max: float = 1.5  # Maximum delay between message segments (seconds)
+
 
 
 
