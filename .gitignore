@@ -24,4 +24,17 @@ nano.*.save
 .spec-workflow
 *.lock
 .claude
+
+# 敏感文件
+*.log
+*.db
+*.db-shm
+*.db-wal
+media/
+
+# 文档文件（但保留重要的项目文档）
 *.md
+!README.md
+!CLAUDE.md
+!SECURITY.md
+!COMMUNICATION.md

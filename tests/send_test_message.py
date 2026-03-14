@@ -18,10 +18,10 @@ CONFIG = {
     "auto_approve_friend": False
 }
 
-TARGET_QQ = "YOUR_QQ_NUMBER"  # ceke
-MESSAGE = "主人～这是浮浮酱发送的音频测试喵～ ≡ω≡"
+TARGET_QQ = "YOUR_QQ_NUMBER"  # 替换为目标 QQ 号
+MESSAGE = "测试消息"
 MEDIA_FILES = [
-    "/path/to/your/media/file.wav"
+    # "/path/to/your/media/file.wav"  # 可选：添加媒体文件路径
 ]
 
 
