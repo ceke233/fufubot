@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from nanobot.agent.tools.base import Tool
 
 
@@ -125,6 +127,9 @@ class ExecTool(Tool):
             output_parts.append(f"\nExit code: {process.returncode}")
 
             result = "\n".join(output_parts) if output_parts else "(no output)"
+
+            # Log complete output for debugging
+            logger.debug("Shell command output (length: {}): {}", len(result), result)
 
             # Head + tail truncation to preserve both start and end of output
             max_len = self._MAX_OUTPUT

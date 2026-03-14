@@ -1,6 +1,9 @@
 """Tool registry for dynamic tool management."""
 
+import json
 from typing import Any
+
+from loguru import logger
 
 from nanobot.agent.tools.base import Tool
 
@@ -43,20 +46,34 @@ class ToolRegistry:
         if not tool:
             return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
 
+        # Log tool execution input
+        logger.debug("=== Tool Execution: {} ===", name)
+        logger.debug("Parameters: {}", json.dumps(params, ensure_ascii=False, indent=2))
+
         try:
             # Attempt to cast parameters to match schema types
             params = tool.cast_params(params)
-            
+
             # Validate parameters
             errors = tool.validate_params(params)
             if errors:
-                return f"Error: Invalid parameters for tool '{name}': " + "; ".join(errors) + _HINT
+                error_msg = f"Error: Invalid parameters for tool '{name}': " + "; ".join(errors) + _HINT
+                logger.debug("Tool validation failed: {}", error_msg)
+                return error_msg
+
             result = await tool.execute(**params)
+
+            # Log tool execution output
+            logger.debug("=== Tool Result: {} ===", name)
+            logger.debug("Result: {}", result)
+
             if isinstance(result, str) and result.startswith("Error"):
                 return result + _HINT
             return result
         except Exception as e:
-            return f"Error executing {name}: {str(e)}" + _HINT
+            error_msg = f"Error executing {name}: {str(e)}" + _HINT
+            logger.debug("Tool execution exception: {}", error_msg)
+            return error_msg
 
     @property
     def tool_names(self) -> list[str]:
