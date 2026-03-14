@@ -20,7 +20,7 @@ def tts_synthesize():
     )
 
     # Generate - auto-detect model type
-    model_type = getattr(model.config, 'tts_model_type', 'base')
+    model_type = getattr(model.model, 'tts_model_type', 'base')
     language = params.get("language") if params.get("language") != "Auto" else None
 
     if model_type == "custom_voice":
@@ -28,7 +28,7 @@ def tts_synthesize():
             text=params["text"],
             language=language,
             speaker=params.get("voice", "Vivian"),
-            instruct=params.get("instruct", "")
+            instruct=params.get("instruct", "温柔甜美的女声")
         )
     elif model_type == "voice_design":
         wavs, sr = model.generate_voice_design(
