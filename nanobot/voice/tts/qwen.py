@@ -9,14 +9,13 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from nanobot.voice.base import TTSProvider
 
 if TYPE_CHECKING:
     pass
 
 try:
+    import numpy as np
     import soundfile as sf
     from qwen_tts.inference.qwen3_tts_model import Qwen3TTSModel
 
@@ -30,7 +29,7 @@ class QwenTTSProvider(TTSProvider):
 
     def __init__(
         self,
-        model_path: str = "Qwen/Qwen3-TTS-1.7B-Base",
+        model_path: str = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
         device: str = "cuda",
         python_path: str = "",
         **kwargs,
@@ -80,6 +79,9 @@ class QwenTTSProvider(TTSProvider):
             return await self._synthesize_subprocess(text, language, **kwargs)
 
         # Direct mode
+        if not QWEN_TTS_AVAILABLE:
+            raise ImportError("qwen-tts dependencies not available")
+
         model = self._ensure_model()
 
         # Generate audio
@@ -90,6 +92,9 @@ class QwenTTSProvider(TTSProvider):
         )
 
         # Convert first audio to bytes
+        import numpy as np
+        import soundfile as sf
+
         audio_np = wavs[0]
         buffer = io.BytesIO()
         sf.write(buffer, audio_np, sr, format="WAV")

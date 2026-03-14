@@ -139,7 +139,7 @@ class AgentLoop:
                 from nanobot.voice.tts.qwen import QwenTTSProvider
 
                 tts_provider = QwenTTSProvider(
-                    model_path=tts_config.get("model_path", "Qwen/Qwen3-TTS-1.7B-Base"),
+                    model_path=tts_config.get("model_path", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"),
                     device="cuda" if tts_config.get("device") == "cuda" else "cpu",
                 )
                 self.tools.register(TextToSpeechTool(tts_provider))
