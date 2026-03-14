@@ -231,6 +231,15 @@ class NapCatConfig(Base):
     typing_delay_min: float = 0.2  # Minimum delay between message segments (seconds)
     typing_delay_max: float = 1.5  # Maximum delay between message segments (seconds)
 
+    # Voice functionality
+    voice_enabled: bool = False  # Enable voice features
+    voice_mode: Literal["both", "receive_only", "send_only"] = "both"  # Voice mode
+    asr_enabled: bool = True  # Auto transcribe received voice messages
+    asr_fallback_text: str = "[语音消息]"  # Fallback text when ASR fails
+    tts_enabled: bool = False  # Send responses as voice (default off)
+    tts_voice: str = ""  # TTS voice name (empty = use global config)
+    tts_language: str = "Auto"  # TTS language
+
 
 
 
@@ -383,6 +392,35 @@ class ToolsConfig(Base):
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
+class TTSConfig(Base):
+    """TTS configuration."""
+
+    enabled: bool = False
+    provider: str = "qwen_tts"  # qwen_tts, edge_tts
+    voice: str = "longxiaochun"  # Default voice
+    language: str = "Auto"
+    model_path: str = ""  # Local model path (optional)
+    api_key: str = ""  # API key (if using cloud)
+
+
+class ASRConfig(Base):
+    """ASR configuration."""
+
+    enabled: bool = False
+    provider: str = "qwen_asr"  # qwen_asr, groq_whisper
+    language: str | None = None  # Force language (None=auto-detect)
+    model_path: str = ""  # Local model path (optional)
+    api_key: str = ""  # API key (if using cloud)
+
+
+class VoiceConfig(Base):
+    """Voice configuration."""
+
+    tts: TTSConfig = Field(default_factory=TTSConfig)
+    asr: ASRConfig = Field(default_factory=ASRConfig)
+    python_path: str = ""  # Path to Python executable in conda env (e.g., /path/to/conda/envs/voice/bin/python)
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
 
@@ -391,6 +429,7 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    voice: VoiceConfig = Field(default_factory=VoiceConfig)
 
     @property
     def workspace_path(self) -> Path:

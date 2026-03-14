@@ -63,6 +63,7 @@ class AgentLoop:
         session_manager: SessionManager | None = None,
         mcp_servers: dict | None = None,
         channels_config: ChannelsConfig | None = None,
+        voice_config: dict | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig, WebSearchConfig
 
@@ -78,6 +79,7 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self.voice_config = voice_config or {}
 
         self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
@@ -128,6 +130,35 @@ class AgentLoop:
         self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
+
+        # Register voice tools if enabled
+        tts_config = self.voice_config.get("tts", {})
+        if tts_config.get("enabled"):
+            try:
+                from nanobot.agent.tools.voice import TextToSpeechTool
+                from nanobot.voice.tts.qwen import QwenTTSProvider
+
+                tts_provider = QwenTTSProvider(
+                    model_path=tts_config.get("model_path", "Qwen/Qwen3-TTS-1.7B-Base"),
+                    device="cuda" if tts_config.get("device") == "cuda" else "cpu",
+                )
+                self.tools.register(TextToSpeechTool(tts_provider))
+            except ImportError:
+                pass
+
+        asr_config = self.voice_config.get("asr", {})
+        if asr_config.get("enabled"):
+            try:
+                from nanobot.agent.tools.voice import SpeechToTextTool
+                from nanobot.voice.asr.qwen import QwenASRProvider
+
+                asr_provider = QwenASRProvider(
+                    model_path=asr_config.get("model_path", "Qwen/Qwen3-ASR-1.7B"),
+                    device="cuda" if asr_config.get("device") == "cuda" else "cpu",
+                )
+                self.tools.register(SpeechToTextTool(asr_provider))
+            except ImportError:
+                pass
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""

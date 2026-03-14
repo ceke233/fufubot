@@ -48,7 +48,12 @@ class ChannelManager:
             if not enabled:
                 continue
             try:
-                channel = cls(section, self.bus)
+                # Pass voice_config for napcat channel
+                if name == "napcat":
+                    voice_config = getattr(self.config, "voice", None)
+                    channel = cls(section, self.bus, voice_config)
+                else:
+                    channel = cls(section, self.bus)
                 channel.transcription_api_key = groq_key
                 self.channels[name] = channel
                 logger.info("{} channel enabled", cls.display_name)

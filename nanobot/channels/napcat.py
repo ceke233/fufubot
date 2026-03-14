@@ -29,7 +29,7 @@ class NapCatChannel(BaseChannel):
     name = "napcat"
     display_name = "NapCat (QQ)"
 
-    def __init__(self, config: NapCatConfig, bus: MessageBus):
+    def __init__(self, config: NapCatConfig, bus: MessageBus, voice_config=None):
         super().__init__(config, bus)
         self.config: NapCatConfig = config
         self._ws: WebSocketClientProtocol | None = None
@@ -41,6 +41,49 @@ class NapCatChannel(BaseChannel):
         # Message debounce: key is "{session_key}:{sender_id}"
         self._message_buffer: dict[str, list[dict]] = {}
         self._debounce_timers: dict[str, asyncio.Task] = {}
+
+        # Voice providers (lazy-loaded)
+        self._tts_provider = None
+        self._asr_provider = None
+        self._voice_config = voice_config
+
+    def _get_asr_provider(self):
+        """Lazy-load ASR provider."""
+        if not self.config.voice_enabled or not self.config.asr_enabled:
+            return None
+        if not self._voice_config or not self._voice_config.asr.enabled:
+            return None
+
+        if self._asr_provider is None:
+            try:
+                from nanobot.voice.asr.qwen import QwenASRProvider
+                model_path = self._voice_config.asr.model_path or "Qwen/Qwen3-ASR-1.7B"
+                python_path = self._voice_config.python_path or ""
+                self._asr_provider = QwenASRProvider(model_path=model_path, python_path=python_path)
+                logger.info("napcat: ASR provider initialized")
+            except Exception as e:
+                logger.error("napcat: failed to initialize ASR: {}", e)
+                return None
+        return self._asr_provider
+
+    def _get_tts_provider(self):
+        """Lazy-load TTS provider."""
+        if not self.config.voice_enabled or not self.config.tts_enabled:
+            return None
+        if not self._voice_config or not self._voice_config.tts.enabled:
+            return None
+
+        if self._tts_provider is None:
+            try:
+                from nanobot.voice.tts.qwen import QwenTTSProvider
+                model_path = self._voice_config.tts.model_path or "Qwen/Qwen3-TTS-1.7B-Base"
+                python_path = self._voice_config.python_path or ""
+                self._tts_provider = QwenTTSProvider(model_path=model_path, python_path=python_path)
+                logger.info("napcat: TTS provider initialized")
+            except Exception as e:
+                logger.error("napcat: failed to initialize TTS: {}", e)
+                return None
+        return self._tts_provider
 
     async def start(self) -> None:
         """Start WebSocket connection to NapCatQQ."""
@@ -117,24 +160,46 @@ class NapCatChannel(BaseChannel):
             self._http = None
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Send message via OneBot API with human-like typing simulation."""
+        """Send message via OneBot API with optional TTS and human-like typing simulation."""
         if not self._ws:
             logger.warning("napcat: not connected, cannot send message")
             return
 
-        # Get message type from metadata or auto-detect from chat_id
-        is_group = msg.metadata.get("is_group")
-        if is_group is None:
-            try:
-                chat_id_int = int(msg.chat_id)
-                is_group = chat_id_int >= 100000000
-                logger.debug("napcat: auto-detected is_group={} for chat_id={}", is_group, msg.chat_id)
-            except ValueError:
-                is_group = False
+        # Get message type from metadata (set during message reception)
+        # QQ private chat: user_id (can be > 100000000)
+        # QQ group chat: group_id (typically 9-10 digits)
+        is_group = msg.metadata.get("is_group", False)
+        logger.debug("napcat: is_group={} for chat_id={}", is_group, msg.chat_id)
 
         target_id = int(msg.chat_id)
 
         try:
+            # TTS conversion
+            tts_provider = self._get_tts_provider()
+            if tts_provider and msg.content and self.config.voice_mode in ("both", "send_only"):
+                try:
+                    from nanobot.config.paths import get_media_dir
+                    voice = self.config.tts_voice or self._voice_config.tts.voice
+                    language = self.config.tts_language
+                    audio_bytes, sample_rate = await tts_provider.synthesize(
+                        text=msg.content,
+                        voice=voice,
+                        language=language
+                    )
+
+                    # Save to local
+                    media_dir = get_media_dir(self.name)
+                    timestamp = int(asyncio.get_event_loop().time())
+                    audio_path = media_dir / f"tts_{target_id}_{timestamp}.wav"
+                    audio_path.write_bytes(audio_bytes)
+
+                    # Send voice
+                    await self._send_single_media(target_id, is_group, str(audio_path))
+                    logger.success("napcat: sent TTS audio")
+                    return
+                except Exception as e:
+                    logger.warning("napcat: TTS failed, fallback to text: {}", e)
+
             # Split message by newline for human-like typing
             if msg.content and "\n" in msg.content:
                 segments = [s.strip() for s in msg.content.split("\n") if s.strip()]
@@ -263,7 +328,22 @@ class NapCatChannel(BaseChannel):
                     local_path = await self._download_audio(file_url, user_id)
                     if local_path:
                         media_urls.append(local_path)
-                        text_parts.append("[语音消息]")
+
+                        # ASR transcription
+                        asr_provider = self._get_asr_provider()
+                        if asr_provider:
+                            try:
+                                transcribed_text = await asr_provider.transcribe(local_path)
+                                if transcribed_text:
+                                    text_parts.append(f"[语音: {transcribed_text}]")
+                                    logger.info("napcat: ASR transcribed: {}", transcribed_text[:50])
+                                else:
+                                    text_parts.append(self.config.asr_fallback_text)
+                            except Exception as e:
+                                logger.warning("napcat: ASR failed: {}", e)
+                                text_parts.append(self.config.asr_fallback_text)
+                        else:
+                            text_parts.append("[语音消息]")
             elif seg_type == "at":
                 qq = data.get("qq")
                 text_parts.append(f"@{qq}" if qq != "all" else "@全体成员")
