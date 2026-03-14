@@ -413,6 +413,11 @@ def gateway(
 
     config = _load_runtime_config(config, workspace)
     _print_deprecated_memory_window_notice(config)
+
+    # 初始化日志系统
+    from nanobot.utils.logging import setup_logging
+    setup_logging(config.logging)
+
     port = port if port is not None else config.gateway.port
 
     console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
@@ -441,6 +446,8 @@ def gateway(
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        voice_config=config.voice.model_dump(),
+        image_config=config.image.model_dump(),
     )
 
     # Set cron callback (needs agent)
@@ -606,6 +613,10 @@ def agent(
     _print_deprecated_memory_window_notice(config)
     sync_workspace_templates(config.workspace_path)
 
+    # 初始化日志系统
+    from nanobot.utils.logging import setup_logging
+    setup_logging(config.logging)
+
     bus = MessageBus()
     provider = _make_provider(config)
 
@@ -632,6 +643,8 @@ def agent(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        voice_config=config.voice.model_dump(),
+        image_config=config.image.model_dump(),
     )
 
     # Show spinner when logs are off (no output to miss); skip when logs are on
@@ -1062,6 +1075,120 @@ def _login_github_copilot() -> None:
     except Exception as e:
         console.print(f"[red]Authentication error: {e}[/red]")
         raise typer.Exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Logs commands
+# ---------------------------------------------------------------------------
+
+logs_app = typer.Typer(help="日志管理命令")
+app.add_typer(logs_app, name="logs")
+
+
+@logs_app.command("list")
+def logs_list():
+    """列出所有日志文件"""
+    from nanobot.utils.logging import get_log_files
+
+    log_files = get_log_files()
+    if not log_files:
+        console.print("[yellow]没有找到日志文件[/yellow]")
+        return
+
+    table = Table(title="日志文件列表")
+    table.add_column("文件名", style="cyan")
+    table.add_column("大小", style="green")
+    table.add_column("修改时间", style="yellow")
+
+    for log_file in log_files:
+        size = log_file.stat().st_size
+        size_str = f"{size / 1024:.1f} KB" if size < 1024 * 1024 else f"{size / (1024 * 1024):.1f} MB"
+        mtime = log_file.stat().st_mtime
+        from datetime import datetime
+        mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+        table.add_row(log_file.name, size_str, mtime_str)
+
+    console.print(table)
+
+
+@logs_app.command("view")
+def logs_view(
+    tail: int = typer.Option(50, "--tail", "-n", help="显示最后 N 行"),
+    level: str = typer.Option(None, "--level", "-l", help="过滤日志级别 (INFO/WARNING/ERROR)"),
+):
+    """查看最新日志"""
+    from nanobot.utils.logging import get_log_files
+
+    log_files = get_log_files()
+    if not log_files:
+        console.print("[yellow]没有找到日志文件[/yellow]")
+        return
+
+    log_file = log_files[0]
+    with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+        lines = f.readlines()
+
+    if level:
+        level = level.upper()
+        lines = [line for line in lines if f"| {level} " in line or f"|{level}|" in line]
+
+    lines = lines[-tail:]
+    console.print(f"[cyan]日志文件: {log_file.name}[/cyan]\n")
+    for line in lines:
+        console.print(line.rstrip())
+
+
+@logs_app.command("search")
+def logs_search(
+    pattern: str = typer.Argument(..., help="搜索模式"),
+    days: int = typer.Option(7, "--days", "-d", help="搜索最近 N 天的日志"),
+):
+    """搜索日志内容"""
+    from nanobot.utils.logging import search_logs
+
+    results = search_logs(pattern, days)
+    if not results:
+        console.print(f"[yellow]未找到匹配 '{pattern}' 的日志[/yellow]")
+        return
+
+    console.print(f"[cyan]找到 {len(results)} 条匹配记录:[/cyan]\n")
+    for result in results[:100]:
+        console.print(result)
+
+    if len(results) > 100:
+        console.print(f"\n[yellow]... 还有 {len(results) - 100} 条记录未显示[/yellow]")
+
+
+@logs_app.command("clean")
+def logs_clean(
+    force: bool = typer.Option(False, "--force", "-f", help="强制清理，不询问确认"),
+):
+    """手动清理过期日志"""
+    from nanobot.utils.logging import get_log_files
+    from datetime import datetime, timedelta
+
+    log_files = get_log_files()
+    cutoff = datetime.now() - timedelta(days=30)
+    old_files = [f for f in log_files if datetime.fromtimestamp(f.stat().st_mtime) < cutoff]
+
+    if not old_files:
+        console.print("[green]没有需要清理的过期日志[/green]")
+        return
+
+    console.print(f"[yellow]找到 {len(old_files)} 个过期日志文件:[/yellow]")
+    for f in old_files:
+        console.print(f"  - {f.name}")
+
+    if not force:
+        confirm = typer.confirm("\n确认删除这些文件?")
+        if not confirm:
+            console.print("[yellow]已取消[/yellow]")
+            return
+
+    for f in old_files:
+        f.unlink()
+
+    console.print(f"[green]✓ 已清理 {len(old_files)} 个日志文件[/green]")
 
 
 if __name__ == "__main__":

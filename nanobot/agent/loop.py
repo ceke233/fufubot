@@ -64,6 +64,7 @@ class AgentLoop:
         mcp_servers: dict | None = None,
         channels_config: ChannelsConfig | None = None,
         voice_config: dict | None = None,
+        image_config: dict | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig, WebSearchConfig
 
@@ -80,6 +81,7 @@ class AgentLoop:
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
         self.voice_config = voice_config or {}
+        self.image_config = image_config or {}
 
         self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
@@ -159,6 +161,41 @@ class AgentLoop:
                 self.tools.register(SpeechToTextTool(asr_provider))
             except ImportError:
                 pass
+
+        # Register image generation tool if enabled
+        if self.image_config.get("enabled"):
+            provider_name = self.image_config.get("provider", "openai")
+            default_size = self.image_config.get("default_size", "1024x1024")
+
+            if provider_name == "openai":
+                from nanobot.image.providers.openai import OpenAIImageProvider
+                from nanobot.agent.tools.image import ImageGenerationTool
+
+                provider = OpenAIImageProvider(
+                    api_key=self.image_config.get("api_key", ""),
+                    model=self.image_config.get("model", "dall-e-3"),
+                    api_base=self.image_config.get("api_base") or None,
+                )
+                self.tools.register(ImageGenerationTool(provider, default_size=default_size))
+            elif provider_name == "dashscope":
+                from nanobot.image.providers.dashscope import DashScopeImageProvider
+                from nanobot.agent.tools.image import ImageGenerationTool
+
+                provider = DashScopeImageProvider(
+                    api_key=self.image_config.get("api_key", ""),
+                    model=self.image_config.get("model", "wanx-v1"),
+                )
+                self.tools.register(ImageGenerationTool(provider, default_size=default_size))
+            elif provider_name == "doubao":
+                from nanobot.image.providers.doubao import DoubaoSeedreamProvider
+                from nanobot.agent.tools.image import ImageGenerationTool
+
+                provider = DoubaoSeedreamProvider(
+                    api_key=self.image_config.get("api_key", ""),
+                    model=self.image_config.get("model", "doubao-seedream-4-5-251128"),
+                    base_url=self.image_config.get("api_base", "https://ark.cn-beijing.volces.com/api/v3"),
+                )
+                self.tools.register(ImageGenerationTool(provider, default_size=default_size))
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""

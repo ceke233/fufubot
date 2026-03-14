@@ -421,6 +421,30 @@ class VoiceConfig(Base):
     python_path: str = ""  # Path to Python executable in conda env (e.g., /path/to/conda/envs/voice/bin/python)
 
 
+class ImageConfig(Base):
+    """Image generation configuration."""
+
+    enabled: bool = False
+    provider: str = "openai"  # openai, dashscope, doubao
+    model: str = ""  # dall-e-3, wanx-v1, doubao-seedream-4-5-251128
+    api_key: str = ""
+    api_base: str = ""  # Optional custom API base URL
+    default_size: str = "1024x1024"
+
+
+class LoggingConfig(Base):
+    """日志配置（简化版）"""
+
+    enabled: bool = True
+    level: str = "INFO"  # 最低日志级别：DEBUG, INFO, WARNING, ERROR
+    rotation: str = "00:00"  # 每天午夜轮转
+    retention: str = "30 days"  # 保留 30 天
+    max_size: str = "100 MB"  # 单文件最大 100MB
+    compression: str = "zip"  # 压缩格式（zip/gz/tar.gz）
+    sanitize_secrets: bool = True  # 脱敏敏感信息
+    show_console: bool = True  # 是否同时输出到终端
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
 
@@ -430,6 +454,8 @@ class Config(BaseSettings):
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
+    image: ImageConfig = Field(default_factory=ImageConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @property
     def workspace_path(self) -> Path:
