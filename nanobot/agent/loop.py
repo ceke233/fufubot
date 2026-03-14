@@ -182,12 +182,15 @@ class AgentLoop:
         finally:
             self._mcp_connecting = False
 
-    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
+    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None, session_key: str = "") -> None:
         """Update context for all tools that need routing info."""
         for name in ("message", "spawn", "cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
+                    if name == "message":
+                        tool.set_context(channel, chat_id, message_id, session_key)
+                    else:
+                        tool.set_context(channel, chat_id)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -223,11 +226,24 @@ class AgentLoop:
 
             tool_defs = self.tools.get_definitions()
 
+            # Log complete input to LLM
+            logger.debug("=== LLM Input (Iteration {}) ===", iteration)
+            logger.debug("Messages: {}", json.dumps(messages, ensure_ascii=False, indent=2))
+            logger.debug("Tools: {}", json.dumps(tool_defs, ensure_ascii=False, indent=2))
+
             response = await self.provider.chat_with_retry(
                 messages=messages,
                 tools=tool_defs,
                 model=self.model,
             )
+
+            # Log complete output from LLM
+            logger.debug("=== LLM Output (Iteration {}) ===", iteration)
+            logger.debug("Content: {}", response.content)
+            logger.debug("Tool calls: {}", json.dumps([
+                {"name": tc.name, "arguments": tc.arguments} for tc in response.tool_calls
+            ], ensure_ascii=False, indent=2) if response.has_tool_calls else "None")
+            logger.debug("Finish reason: {}", response.finish_reason)
 
             if response.has_tool_calls:
                 if on_progress:
@@ -250,8 +266,6 @@ class AgentLoop:
 
                 for tool_call in response.tool_calls:
                     tools_used.append(tool_call.name)
-                    args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
-                    logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
@@ -386,7 +400,7 @@ class AgentLoop:
             key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
             await self.memory_consolidator.maybe_consolidate_by_tokens(session)
-            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
+            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"), key)
             history = session.get_history(max_messages=0)
             messages = self.context.build_messages(
                 history=history,
@@ -441,7 +455,7 @@ class AgentLoop:
             )
         await self.memory_consolidator.maybe_consolidate_by_tokens(session)
 
-        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
+        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"), msg.session_key)
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
