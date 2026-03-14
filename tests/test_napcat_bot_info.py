@@ -3,13 +3,14 @@
 
 import asyncio
 import json
+import os
 import websockets
 
 
 async def test_napcat_connection():
     """测试连接 NapCat 并获取 bot 信息"""
     ws_url = "ws://localhost:3001"
-    access_token = "123456789123"  # 从 send_test_message.py 获取
+    access_token = os.getenv("NAPCAT_ACCESS_TOKEN", "")
 
     print(f"🔗 连接到 {ws_url}...")
 
