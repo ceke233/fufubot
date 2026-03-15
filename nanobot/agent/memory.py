@@ -7,7 +7,7 @@ import json
 import weakref
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Awaitable
 
 from loguru import logger
 
@@ -77,11 +77,31 @@ class MemoryStore:
 
     _MAX_FAILURES_BEFORE_RAW_ARCHIVE = 3
 
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, user_id: str = "default", viking_config: dict[str, Any] | None = None):
         self.memory_dir = ensure_dir(workspace / "memory")
         self.memory_file = self.memory_dir / "MEMORY.md"
         self.history_file = self.memory_dir / "HISTORY.md"
         self._consecutive_failures = 0
+
+        # OpenViking 集成（可选）
+        self.viking = None
+        if viking_config and viking_config.get("enabled"):
+            try:
+                from nanobot.agent.memory_viking import VikingMemoryStore
+                self.viking = VikingMemoryStore(
+                    workspace=workspace,
+                    user_id=user_id,
+                    base_url=viking_config.get("base_url", "http://localhost:1933"),
+                    api_key=viking_config.get("api_key", ""),
+                    enabled=True,
+                    auto_recall=viking_config.get("auto_recall", True),
+                    auto_capture=viking_config.get("auto_capture", True),
+                    target_uri=viking_config.get("target_uri_template", "viking://user_{user_id}/memories").format(user_id=user_id),
+                    mode=viking_config.get("mode", "remote"),
+                    config_path=viking_config.get("config_path")
+                )
+            except ImportError:
+                logger.warning("VikingMemoryStore not available, Viking integration disabled")
 
     def read_long_term(self) -> str:
         if self.memory_file.exists():
@@ -91,9 +111,21 @@ class MemoryStore:
     def write_long_term(self, content: str) -> None:
         self.memory_file.write_text(content, encoding="utf-8")
 
+        # 异步同步到 Viking（不阻塞）
+        if self.viking:
+            asyncio.create_task(
+                self.viking.add_resource(content, {"type": "long_term", "timestamp": datetime.now().isoformat()})
+            )
+
     def append_history(self, entry: str) -> None:
         with open(self.history_file, "a", encoding="utf-8") as f:
             f.write(entry.rstrip() + "\n\n")
+
+        # 异步同步到 Viking（不阻塞）
+        if self.viking:
+            asyncio.create_task(
+                self.viking.add_resource(entry, {"type": "history", "timestamp": datetime.now().isoformat()})
+            )
 
     def get_memory_context(self) -> str:
         long_term = self.read_long_term()
@@ -231,10 +263,11 @@ class MemoryConsolidator:
         model: str,
         sessions: SessionManager,
         context_window_tokens: int,
-        build_messages: Callable[..., list[dict[str, Any]]],
+        build_messages: Callable[..., Awaitable[list[dict[str, Any]]]],
         get_tool_definitions: Callable[[], list[dict[str, Any]]],
+        viking_config: dict[str, Any] | None = None,
     ):
-        self.store = MemoryStore(workspace)
+        self.store = MemoryStore(workspace, viking_config=viking_config)
         self.provider = provider
         self.model = model
         self.sessions = sessions
@@ -273,11 +306,11 @@ class MemoryConsolidator:
 
         return last_boundary
 
-    def estimate_session_prompt_tokens(self, session: Session) -> tuple[int, str]:
+    async def estimate_session_prompt_tokens(self, session: Session) -> tuple[int, str]:
         """Estimate current prompt size for the normal session history view."""
         history = session.get_history(max_messages=0)
         channel, chat_id = (session.key.split(":", 1) if ":" in session.key else (None, None))
-        probe_messages = self._build_messages(
+        probe_messages = await self._build_messages(
             history=history,
             current_message="[token-probe]",
             channel=channel,
@@ -307,7 +340,7 @@ class MemoryConsolidator:
         lock = self.get_lock(session.key)
         async with lock:
             target = self.context_window_tokens // 2
-            estimated, source = self.estimate_session_prompt_tokens(session)
+            estimated, source = await self.estimate_session_prompt_tokens(session)
             if estimated <= 0:
                 return
             if estimated < self.context_window_tokens:
@@ -352,6 +385,6 @@ class MemoryConsolidator:
                 session.last_consolidated = end_idx
                 self.sessions.save(session)
 
-                estimated, source = self.estimate_session_prompt_tokens(session)
+                estimated, source = await self.estimate_session_prompt_tokens(session)
                 if estimated <= 0:
                     return

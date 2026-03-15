@@ -1,5 +1,6 @@
 """Context builder for assembling agent prompts."""
 
+import asyncio
 import base64
 import mimetypes
 import platform
@@ -7,6 +8,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from loguru import logger
 
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.skills import SkillsLoader
@@ -19,12 +22,29 @@ class ContextBuilder:
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md"]
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
 
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, viking_config: dict[str, Any] | None = None):
         self.workspace = workspace
-        self.memory = MemoryStore(workspace)
+        self.viking_config = viking_config
         self.skills = SkillsLoader(workspace)
+        # 多用户 MemoryStore 缓存
+        self._memory_stores: dict[str, MemoryStore] = {}
 
-    def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
+    def _get_memory_store(self, user_id: str = "default") -> MemoryStore:
+        """Get or create MemoryStore for a specific user."""
+        if user_id not in self._memory_stores:
+            self._memory_stores[user_id] = MemoryStore(
+                self.workspace,
+                user_id=user_id,
+                viking_config=self.viking_config
+            )
+        return self._memory_stores[user_id]
+
+    async def build_system_prompt(
+        self,
+        skill_names: list[str] | None = None,
+        user_message: str | None = None,
+        user_id: str = "default"
+    ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
         parts = [self._get_identity()]
 
@@ -32,9 +52,10 @@ class ContextBuilder:
         if bootstrap:
             parts.append(bootstrap)
 
-        memory = self.memory.get_memory_context()
-        if memory:
-            parts.append(f"# Memory\n\n{memory}")
+        # 记忆部分：优先使用 Viking 语义搜索
+        memory_content = await self._get_memory_with_semantic_search(user_message, user_id)
+        if memory_content:
+            parts.append(memory_content)
 
         always_skills = self.skills.get_always_skills()
         if always_skills:
@@ -52,6 +73,51 @@ Skills with available="false" need dependencies installed first - you can try in
 {skills_summary}""")
 
         return "\n\n---\n\n".join(parts)
+
+    async def _get_memory_with_semantic_search(self, user_message: str | None, user_id: str = "default") -> str:
+        """Get memory context with optional Viking semantic search."""
+        memory_store = self._get_memory_store(user_id)
+
+        if not user_message or not memory_store.viking or not memory_store.viking.auto_recall:
+            # 未启用 Viking 或无用户消息，使用传统方式
+            memory = memory_store.get_memory_context()
+            return f"# Memory\n\n{memory}" if memory else ""
+
+        try:
+            # 尝试语义搜索（5秒超时）
+            results = await asyncio.wait_for(
+                memory_store.viking.find(query=user_message, max_results=5),
+                timeout=5.0
+            )
+
+            if results:
+                # 重排序结果
+                ranked_results = memory_store.viking.rank_memories(results, user_message)
+
+                # 格式化检索结果
+                memory_parts = []
+                for i, result in enumerate(ranked_results[:5], 1):
+                    content = result.get("content", "")
+                    score = result.get("final_score", result.get("score", 0))
+                    memory_parts.append(f"[Memory {i}] (relevance: {score:.2f})\n{content}")
+
+                semantic_memory = "\n\n".join(memory_parts)
+                logger.debug(f"Loaded {len(ranked_results)} memories via Viking semantic search")
+                return f"# Memory (Semantic Search)\n\n{semantic_memory}"
+            else:
+                # 无结果，回退到传统方式
+                logger.debug("Viking search returned no results, using fallback")
+                memory = memory_store.get_memory_context()
+                return f"# Memory\n\n{memory}" if memory else ""
+
+        except asyncio.TimeoutError:
+            logger.warning("Viking search timeout, using fallback")
+            memory = memory_store.get_memory_context()
+            return f"# Memory\n\n{memory}" if memory else ""
+        except Exception as e:
+            logger.warning(f"Viking search failed: {e}, using fallback")
+            memory = memory_store.get_memory_context()
+            return f"# Memory\n\n{memory}" if memory else ""
 
     def _get_identity(self) -> str:
         """Get the core identity section."""
@@ -118,7 +184,7 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
 
         return "\n\n".join(parts) if parts else ""
 
-    def build_messages(
+    async def build_messages(
         self,
         history: list[dict[str, Any]],
         current_message: str,
@@ -138,8 +204,18 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
         else:
             merged = [{"type": "text", "text": runtime_ctx}] + user_content
 
+        # Calculate user_id from channel and chat_id
+        user_id = f"{channel}:{chat_id}" if channel and chat_id else "default"
+
+        # Build system prompt with semantic search enabled
+        system_prompt = await self.build_system_prompt(
+            skill_names,
+            user_message=current_message,
+            user_id=user_id
+        )
+
         return [
-            {"role": "system", "content": self.build_system_prompt(skill_names)},
+            {"role": "system", "content": system_prompt},
             *history,
             {"role": "user", "content": merged},
         ]

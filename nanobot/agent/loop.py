@@ -65,6 +65,7 @@ class AgentLoop:
         channels_config: ChannelsConfig | None = None,
         voice_config: dict | None = None,
         image_config: dict | None = None,
+        viking_config: dict | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig, WebSearchConfig
 
@@ -83,7 +84,7 @@ class AgentLoop:
         self.voice_config = voice_config or {}
         self.image_config = image_config or {}
 
-        self.context = ContextBuilder(workspace)
+        self.context = ContextBuilder(workspace, viking_config=viking_config)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -112,6 +113,7 @@ class AgentLoop:
             context_window_tokens=context_window_tokens,
             build_messages=self.context.build_messages,
             get_tool_definitions=self.tools.get_definitions,
+            viking_config=viking_config,
         )
         self._register_default_tools()
 
@@ -439,7 +441,7 @@ class AgentLoop:
             await self.memory_consolidator.maybe_consolidate_by_tokens(session)
             self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"), key)
             history = session.get_history(max_messages=0)
-            messages = self.context.build_messages(
+            messages = await self.context.build_messages(
                 history=history,
                 current_message=msg.content, channel=channel, chat_id=chat_id,
             )
@@ -498,7 +500,7 @@ class AgentLoop:
                 message_tool.start_turn()
 
         history = session.get_history(max_messages=0)
-        initial_messages = self.context.build_messages(
+        initial_messages = await self.context.build_messages(
             history=history,
             current_message=msg.content,
             media=msg.media if msg.media else None,
