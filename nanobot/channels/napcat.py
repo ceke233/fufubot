@@ -75,11 +75,23 @@ class NapCatChannel(BaseChannel):
 
         if self._tts_provider is None:
             try:
-                from nanobot.voice.tts.qwen import QwenTTSProvider
-                model_path = self._voice_config.tts.model_path or "Qwen/Qwen3-TTS-1.7B-Base"
-                python_path = self._voice_config.python_path or ""
-                self._tts_provider = QwenTTSProvider(model_path=model_path, python_path=python_path)
-                logger.info("napcat: TTS provider initialized")
+                provider_name = self._voice_config.tts.provider
+
+                if provider_name == "openai_tts":
+                    from nanobot.voice.tts.openai import OpenAITTSProvider
+                    self._tts_provider = OpenAITTSProvider(
+                        base_url=self._voice_config.tts.api_base or "http://localhost:18000",
+                        api_key=self._voice_config.tts.api_key or "",
+                        model=self._voice_config.tts.model_path or "tts-1",
+                        voice=self._voice_config.tts.voice or "alloy",
+                    )
+                else:  # qwen_tts
+                    from nanobot.voice.tts.qwen import QwenTTSProvider
+                    model_path = self._voice_config.tts.model_path or "Qwen/Qwen3-TTS-1.7B-Base"
+                    python_path = self._voice_config.python_path or ""
+                    self._tts_provider = QwenTTSProvider(model_path=model_path, python_path=python_path)
+
+                logger.info("napcat: TTS provider initialized ({})", provider_name)
             except Exception as e:
                 logger.error("napcat: failed to initialize TTS: {}", e)
                 return None
