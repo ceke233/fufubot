@@ -138,31 +138,58 @@ class AgentLoop:
         # Register voice tools if enabled
         tts_config = self.voice_config.get("tts", {})
         if tts_config.get("enabled"):
+            provider_name = tts_config.get("provider", "qwen_tts")
             try:
                 from nanobot.agent.tools.voice import TextToSpeechTool
-                from nanobot.voice.tts.qwen import QwenTTSProvider
 
-                tts_provider = QwenTTSProvider(
-                    model_path=tts_config.get("model_path", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"),
-                    device="cuda" if tts_config.get("device") == "cuda" else "cpu",
-                )
+                if provider_name == "openai_tts":
+                    from nanobot.voice.tts.openai import OpenAITTSProvider
+
+                    tts_provider = OpenAITTSProvider(
+                        base_url=tts_config.get("api_base") or "http://localhost:18000",
+                        api_key=tts_config.get("api_key", ""),
+                        model=tts_config.get("model_path") or "tts-1",
+                        voice=tts_config.get("voice", "alloy"),
+                    )
+                else:  # qwen_tts
+                    from nanobot.voice.tts.qwen import QwenTTSProvider
+
+                    tts_provider = QwenTTSProvider(
+                        model_path=tts_config.get("model_path", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"),
+                        device="cuda" if tts_config.get("device") == "cuda" else "cpu",
+                    )
+
                 self.tools.register(TextToSpeechTool(tts_provider))
-            except ImportError:
-                pass
+            except ImportError as e:
+                logger.warning(f"TTS provider {provider_name} not available: {e}")
+
 
         asr_config = self.voice_config.get("asr", {})
         if asr_config.get("enabled"):
+            provider_name = asr_config.get("provider", "qwen_asr")
             try:
                 from nanobot.agent.tools.voice import SpeechToTextTool
-                from nanobot.voice.asr.qwen import QwenASRProvider
 
-                asr_provider = QwenASRProvider(
-                    model_path=asr_config.get("model_path", "Qwen/Qwen3-ASR-1.7B"),
-                    device="cuda" if asr_config.get("device") == "cuda" else "cpu",
-                )
+                if provider_name == "openai_asr":
+                    from nanobot.voice.asr.openai import OpenAIASRProvider
+
+                    asr_provider = OpenAIASRProvider(
+                        base_url=asr_config.get("api_base") or "http://localhost:18001",
+                        api_key=asr_config.get("api_key", ""),
+                        model=asr_config.get("model_path") or "whisper-1",
+                    )
+                else:  # qwen_asr
+                    from nanobot.voice.asr.qwen import QwenASRProvider
+
+                    asr_provider = QwenASRProvider(
+                        model_path=asr_config.get("model_path", "Qwen/Qwen3-ASR-1.7B"),
+                        device="cuda" if asr_config.get("device") == "cuda" else "cpu",
+                    )
+
                 self.tools.register(SpeechToTextTool(asr_provider))
-            except ImportError:
-                pass
+            except ImportError as e:
+                logger.warning(f"ASR provider {provider_name} not available: {e}")
+
 
         # Register image generation tool if enabled
         if self.image_config.get("enabled"):

@@ -396,21 +396,23 @@ class TTSConfig(Base):
     """TTS configuration."""
 
     enabled: bool = False
-    provider: str = "qwen_tts"  # qwen_tts, edge_tts
+    provider: str = "qwen_tts"  # qwen_tts, edge_tts, openai_tts
     voice: str = "longxiaochun"  # Default voice
     language: str = "Auto"
-    model_path: str = ""  # Local model path (optional)
+    model_path: str = ""  # Local model path or model name for OpenAI
     api_key: str = ""  # API key (if using cloud)
+    api_base: str = ""  # API base URL for OpenAI-compatible services
 
 
 class ASRConfig(Base):
     """ASR configuration."""
 
     enabled: bool = False
-    provider: str = "qwen_asr"  # qwen_asr, groq_whisper
+    provider: str = "qwen_asr"  # qwen_asr, groq_whisper, openai_asr
     language: str | None = None  # Force language (None=auto-detect)
-    model_path: str = ""  # Local model path (optional)
+    model_path: str = ""  # Local model path or model name for OpenAI
     api_key: str = ""  # API key (if using cloud)
+    api_base: str = ""  # API base URL for OpenAI-compatible services
 
 
 class VoiceConfig(Base):
@@ -445,6 +447,31 @@ class LoggingConfig(Base):
     show_console: bool = True  # 是否同时输出到终端
 
 
+class VikingConfig(Base):
+    """OpenViking integration configuration."""
+
+    enabled: bool = False
+    mode: Literal["local", "remote"] = "remote"
+
+    # Local mode: 自动启动 openviking-server
+    config_path: str = "~/.openviking/ov.conf"
+
+    # Remote mode: 连接到远程服务器
+    base_url: str = "http://localhost:1933"
+    api_key: str = ""
+
+    # 功能开关
+    auto_recall: bool = True  # 自动语义检索
+    auto_capture: bool = True  # 自动同步记忆
+
+    # 检索参数
+    max_search_results: int = 5
+    search_timeout: float = 5.0
+
+    # 用户命名空间
+    target_uri_template: str = "viking://user_{user_id}/memories"
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
 
@@ -456,6 +483,7 @@ class Config(BaseSettings):
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     image: ImageConfig = Field(default_factory=ImageConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    viking: VikingConfig = Field(default_factory=VikingConfig)
 
     @property
     def workspace_path(self) -> Path:
@@ -554,5 +582,3 @@ class Config(BaseSettings):
             if spec and (spec.is_gateway or spec.is_local) and spec.default_api_base:
                 return spec.default_api_base
         return None
-
-    model_config = ConfigDict(env_prefix="NANOBOT_", env_nested_delimiter="__")
