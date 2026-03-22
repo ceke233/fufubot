@@ -51,7 +51,7 @@ class OpenAITTSProvider(TTSProvider):
         logger.debug(f"OpenAI TTS 合成: text={text[:50]}..., voice={selected_voice}, speed={speed}")
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(
                     f"{self.base_url}/v1/audio/speech",
                     json={
@@ -70,5 +70,8 @@ class OpenAITTSProvider(TTSProvider):
                 return audio_data, 24000  # OpenAI API 不返回采样率，假设 24kHz
 
         except httpx.HTTPError as e:
-            logger.error(f"OpenAI TTS 请求失败: {e}")
-            raise RuntimeError(f"TTS 合成失败: {e}") from e
+            logger.error(f"OpenAI TTS 请求失败: {type(e).__name__}: {str(e)}")
+            raise RuntimeError(f"TTS 合成失败: {type(e).__name__}: {str(e)}") from e
+        except Exception as e:
+            logger.error(f"OpenAI TTS 未知错误: {type(e).__name__}: {str(e)}")
+            raise RuntimeError(f"TTS 合成失败: {type(e).__name__}: {str(e)}") from e

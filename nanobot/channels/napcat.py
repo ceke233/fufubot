@@ -614,7 +614,8 @@ class NapCatChannel(BaseChannel):
                 await asyncio.sleep(self.config.message_debounce_seconds)
                 await self._flush_buffered_messages(buffer_key, session_key, sender_id, chat_id, metadata)
             except asyncio.CancelledError:
-                pass
+                logger.debug("napcat: debounce timer cancelled for {}", buffer_key)
+                raise
             except Exception as e:
                 logger.error("napcat: debounce timer error: {}", e)
 

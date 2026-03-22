@@ -104,7 +104,7 @@ class AgentLoop:
         self._mcp_connected = False
         self._mcp_connecting = False
         self._active_tasks: dict[str, list[asyncio.Task]] = {}  # session_key -> tasks
-        self._processing_lock = asyncio.Lock()
+        self._session_locks: dict[str, asyncio.Lock] = {}  # 会话级锁
         self.memory_consolidator = MemoryConsolidator(
             workspace=workspace,
             provider=provider,
@@ -416,8 +416,16 @@ class AgentLoop:
         asyncio.create_task(_do_restart())
 
     async def _dispatch(self, msg: InboundMessage) -> None:
-        """Process a message under the global lock."""
-        async with self._processing_lock:
+        """Process a message under session-level lock."""
+        session_key = msg.session_key
+        
+        # 获取或创建会话锁
+        if session_key not in self._session_locks:
+            self._session_locks[session_key] = asyncio.Lock()
+        
+        lock = self._session_locks[session_key]
+        
+        async with lock:
             try:
                 response = await self._process_message(msg)
                 if response is not None:

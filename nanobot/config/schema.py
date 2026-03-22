@@ -224,7 +224,7 @@ class NapCatConfig(Base):
 
     # Message debounce configuration
     message_debounce_enabled: bool = True  # Enable message debouncing
-    message_debounce_seconds: float = 5  # Debounce delay in seconds
+    message_debounce_seconds: float = 30  # Debounce delay in seconds
     message_debounce_max_messages: int = 50  # Buffer size limit
 
     # Human-like typing simulation
