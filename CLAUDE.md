@@ -27,7 +27,8 @@ fufubot/
 │   │       ├── message.py     # MessageTool 消息发送
 │   │       ├── cron.py        # CronTool 定时任务
 │   │       ├── spawn.py       # SpawnTool 子进程
-│   │       └── voice.py       # VoiceTool 语音处理
+│   │       ├── voice.py       # VoiceTool 语音处理
+│   │       └── image.py       # ImageTool 图像生成
 │   │
 │   ├── bus/                   # 消息总线
 │   │   ├── queue.py          # MessageBus 消息队列
@@ -51,7 +52,13 @@ fufubot/
 │   │   └── mochat.py         # MoChat 渠道
 │   │
 │   ├── providers/             # LLM Provider
-│   │   └── base.py           # LLMProvider 抽象基类（基于 litellm）
+│   │   ├── base.py           # LLMProvider 抽象基类（基于 litellm）
+│   │   ├── registry.py       # Provider 注册表
+│   │   ├── litellm_provider.py # LiteLLM 统一接口
+│   │   ├── azure_openai_provider.py # Azure OpenAI
+│   │   ├── openai_codex_provider.py # OpenAI Codex
+│   │   ├── custom_provider.py # 自定义 Provider
+│   │   └── transcription.py  # 语音转文字
 │   │
 │   ├── session/               # 会话管理
 │   │   └── manager.py        # SessionManager/Session
@@ -69,8 +76,17 @@ fufubot/
 │   │   └── service.py        # HeartbeatService
 │   │
 │   ├── voice/                 # 语音处理
+│   │   ├── base.py           # TTS/ASR 抽象基类
+│   │   ├── registry.py       # 语音服务注册表
 │   │   ├── tts/              # 语音合成
 │   │   └── asr/              # 语音识别
+│   │
+│   ├── image/                 # 图像生成
+│   │   ├── base.py           # ImageProvider 抽象基类
+│   │   └── providers/        # 图像生成提供商
+│   │       ├── openai.py     # OpenAI DALL-E
+│   │       ├── dashscope.py  # 阿里云通义万相
+│   │       └── doubao.py     # 字节豆包 Seedream
 │   │
 │   ├── skills/                # 内置技能
 │   │   ├── clawhub/          # ClawHub 集成
@@ -86,6 +102,9 @@ fufubot/
 │   │   └── memory/           # 记忆模板
 │   │
 │   ├── utils/                 # 工具函数
+│   │   ├── helpers.py        # 辅助函数
+│   │   ├── evaluator.py      # 表达式求值器
+│   │   └── logging.py        # 日志系统
 │   │
 │   └── cli/                   # CLI 命令
 │       └── commands.py       # Typer CLI 入口
@@ -130,15 +149,32 @@ fufubot/
 
 ### 5. 工具系统 (Tools)
 - `nanobot/agent/tools/registry.py` - ToolRegistry 工具注册表
-- 内置工具：shell (ExecTool), filesystem (Read/Write/Edit/ListDir), web (Search/Fetch), message, cron, spawn, voice
+- 内置工具：shell (ExecTool), filesystem (Read/Write/Edit/ListDir), web (Search/Fetch), message, cron, spawn, voice, image
 - MCP 工具：`nanobot/agent/tools/mcp.py` - 动态加载 MCP 服务器工具
 
-### 6. 会话管理
+### 6. 图像生成系统
+- `nanobot/image/base.py` - ImageProvider 抽象基类
+- 支持的提供商：
+  - OpenAI DALL-E (`nanobot/image/providers/openai.py`)
+  - 阿里云通义万相 (`nanobot/image/providers/dashscope.py`)
+  - 字节豆包 Seedream (`nanobot/image/providers/doubao.py`)
+- ImageTool 工具集成 (`nanobot/agent/tools/image.py`)
+
+### 7. 日志管理系统
+- `nanobot/utils/logging.py` - 基于 loguru 的统一日志管理
+- 功能特性：
+  - 敏感信息自动脱敏（API keys、tokens）
+  - 日志轮转和压缩（按大小和时间）
+  - 多级别日志输出（DEBUG, INFO, WARNING, ERROR）
+  - 结构化日志格式
+- 配置项：通过环境变量或配置文件设置日志级别和输出路径
+
+### 8. 会话管理
 - `nanobot/session/manager.py` - SessionManager 会话管理器
 - 每个会话绑定到特定用户和渠道
 - 支持多用户隔离
 
-### 7. 记忆系统
+### 9. 记忆系统
 - `nanobot/agent/memory.py` - MemoryConsolidator 记忆整合器
 - 支持短期记忆、长期记忆、情景记忆
 
@@ -212,6 +248,7 @@ class MyChannel(BaseChannel):
 - **核心**：typer (CLI), litellm (LLM), pydantic (配置), loguru (日志)
 - **渠道**：python-telegram-bot, lark-oapi, dingtalk-stream, discord.py, slack-sdk 等
 - **工具**：httpx (HTTP), ddgs (搜索), croniter (定时), mcp (MCP 协议)
+- **图像生成**：openai (DALL-E), dashscope (通义万相), volcengine (豆包 Seedream)
 - **开发**：pytest, pytest-asyncio, ruff
 
 ## 代码风格
