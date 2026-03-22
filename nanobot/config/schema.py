@@ -13,236 +13,6 @@ class Base(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-
-class WhatsAppConfig(Base):
-    """WhatsApp channel configuration."""
-
-    enabled: bool = False
-    bridge_url: str = "ws://localhost:3001"
-    bridge_token: str = ""  # Shared token for bridge auth (optional, recommended)
-    allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
-
-
-class TelegramConfig(Base):
-    """Telegram channel configuration."""
-
-    enabled: bool = False
-    token: str = ""  # Bot token from @BotFather
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs or usernames
-    proxy: str | None = (
-        None  # HTTP/SOCKS5 proxy URL, e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
-    )
-    reply_to_message: bool = False  # If true, bot replies quote the original message
-    group_policy: Literal["open", "mention"] = "mention"  # "mention" responds when @mentioned or replied to, "open" responds to all
-
-
-class FeishuConfig(Base):
-    """Feishu/Lark channel configuration using WebSocket long connection."""
-
-    enabled: bool = False
-    app_id: str = ""  # App ID from Feishu Open Platform
-    app_secret: str = ""  # App Secret from Feishu Open Platform
-    encrypt_key: str = ""  # Encrypt Key for event subscription (optional)
-    verification_token: str = ""  # Verification Token for event subscription (optional)
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user open_ids
-    react_emoji: str = (
-        "THUMBSUP"  # Emoji type for message reactions (e.g. THUMBSUP, OK, DONE, SMILE)
-    )
-
-
-class DingTalkConfig(Base):
-    """DingTalk channel configuration using Stream mode."""
-
-    enabled: bool = False
-    client_id: str = ""  # AppKey
-    client_secret: str = ""  # AppSecret
-    allow_from: list[str] = Field(default_factory=list)  # Allowed staff_ids
-
-
-class DiscordConfig(Base):
-    """Discord channel configuration."""
-
-    enabled: bool = False
-    token: str = ""  # Bot token from Discord Developer Portal
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs
-    gateway_url: str = "wss://gateway.discord.gg/?v=10&encoding=json"
-    intents: int = 37377  # GUILDS + GUILD_MESSAGES + DIRECT_MESSAGES + MESSAGE_CONTENT
-    group_policy: Literal["mention", "open"] = "mention"
-
-
-class MatrixConfig(Base):
-    """Matrix (Element) channel configuration."""
-
-    enabled: bool = False
-    homeserver: str = "https://matrix.org"
-    access_token: str = ""
-    user_id: str = ""  # @bot:matrix.org
-    device_id: str = ""
-    e2ee_enabled: bool = True  # Enable Matrix E2EE support (encryption + encrypted room handling).
-    sync_stop_grace_seconds: int = (
-        2  # Max seconds to wait for sync_forever to stop gracefully before cancellation fallback.
-    )
-    max_media_bytes: int = (
-        20 * 1024 * 1024
-    )  # Max attachment size accepted for Matrix media handling (inbound + outbound).
-    allow_from: list[str] = Field(default_factory=list)
-    group_policy: Literal["open", "mention", "allowlist"] = "open"
-    group_allow_from: list[str] = Field(default_factory=list)
-    allow_room_mentions: bool = False
-
-
-class EmailConfig(Base):
-    """Email channel configuration (IMAP inbound + SMTP outbound)."""
-
-    enabled: bool = False
-    consent_granted: bool = False  # Explicit owner permission to access mailbox data
-
-    # IMAP (receive)
-    imap_host: str = ""
-    imap_port: int = 993
-    imap_username: str = ""
-    imap_password: str = ""
-    imap_mailbox: str = "INBOX"
-    imap_use_ssl: bool = True
-
-    # SMTP (send)
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    smtp_use_tls: bool = True
-    smtp_use_ssl: bool = False
-    from_address: str = ""
-
-    # Behavior
-    auto_reply_enabled: bool = (
-        True  # If false, inbound email is read but no automatic reply is sent
-    )
-    poll_interval_seconds: int = 30
-    mark_seen: bool = True
-    max_body_chars: int = 12000
-    subject_prefix: str = "Re: "
-    allow_from: list[str] = Field(default_factory=list)  # Allowed sender email addresses
-
-
-class MochatMentionConfig(Base):
-    """Mochat mention behavior configuration."""
-
-    require_in_groups: bool = False
-
-
-class MochatGroupRule(Base):
-    """Mochat per-group mention requirement."""
-
-    require_mention: bool = False
-
-
-class MochatConfig(Base):
-    """Mochat channel configuration."""
-
-    enabled: bool = False
-    base_url: str = "https://mochat.io"
-    socket_url: str = ""
-    socket_path: str = "/socket.io"
-    socket_disable_msgpack: bool = False
-    socket_reconnect_delay_ms: int = 1000
-    socket_max_reconnect_delay_ms: int = 10000
-    socket_connect_timeout_ms: int = 10000
-    refresh_interval_ms: int = 30000
-    watch_timeout_ms: int = 25000
-    watch_limit: int = 100
-    retry_delay_ms: int = 500
-    max_retry_attempts: int = 0  # 0 means unlimited retries
-    claw_token: str = ""
-    agent_user_id: str = ""
-    sessions: list[str] = Field(default_factory=list)
-    panels: list[str] = Field(default_factory=list)
-    allow_from: list[str] = Field(default_factory=list)
-    mention: MochatMentionConfig = Field(default_factory=MochatMentionConfig)
-    groups: dict[str, MochatGroupRule] = Field(default_factory=dict)
-    reply_delay_mode: str = "non-mention"  # off | non-mention
-    reply_delay_ms: int = 120000
-
-
-class SlackDMConfig(Base):
-    """Slack DM policy configuration."""
-
-    enabled: bool = True
-    policy: str = "open"  # "open" or "allowlist"
-    allow_from: list[str] = Field(default_factory=list)  # Allowed Slack user IDs
-
-
-class SlackConfig(Base):
-    """Slack channel configuration."""
-
-    enabled: bool = False
-    mode: str = "socket"  # "socket" supported
-    webhook_path: str = "/slack/events"
-    bot_token: str = ""  # xoxb-...
-    app_token: str = ""  # xapp-...
-    user_token_read_only: bool = True
-    reply_in_thread: bool = True
-    react_emoji: str = "eyes"
-    allow_from: list[str] = Field(default_factory=list)  # Allowed Slack user IDs (sender-level)
-    group_policy: str = "mention"  # "mention", "open", "allowlist"
-    group_allow_from: list[str] = Field(default_factory=list)  # Allowed channel IDs if allowlist
-    dm: SlackDMConfig = Field(default_factory=SlackDMConfig)
-
-
-class QQConfig(Base):
-    """QQ channel configuration using botpy SDK."""
-
-    enabled: bool = False
-    app_id: str = ""  # 机器人 ID (AppID) from q.qq.com
-    secret: str = ""  # 机器人密钥 (AppSecret) from q.qq.com
-    allow_from: list[str] = Field(
-        default_factory=list
-    )  # Allowed user openids (empty = public access)
-
-
-class WecomConfig(Base):
-    """WeCom (Enterprise WeChat) AI Bot channel configuration."""
-
-    enabled: bool = False
-    bot_id: str = ""  # Bot ID from WeCom AI Bot platform
-    secret: str = ""  # Bot Secret from WeCom AI Bot platform
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs
-
-
-class NapCatConfig(Base):
-    """NapCat (OneBot 11) channel configuration using WebSocket."""
-
-    enabled: bool = False
-    ws_url: str = "ws://localhost:3001"  # NapCat WebSocket URL
-    access_token: str = ""  # Optional access token for authentication
-    allow_from: list[str] = Field(default_factory=list)  # Allowed QQ user IDs
-    group_policy: Literal["open", "mention"] = "mention"  # "mention" responds when @mentioned, "open" responds to all
-    welcome_message: str = ""  # Welcome message for enter_chat event
-    handle_notice_events: bool = False  # Handle notice events (group member changes, friend add)
-    handle_request_events: bool = False  # Handle request events (friend/group requests)
-    auto_approve_friend: bool = False  # Auto approve friend requests (use with caution)
-
-    # Message debounce configuration
-    message_debounce_enabled: bool = True  # Enable message debouncing
-    message_debounce_seconds: float = 30  # Debounce delay in seconds
-    message_debounce_max_messages: int = 50  # Buffer size limit
-
-    # Human-like typing simulation
-    typing_delay_min: float = 0.2  # Minimum delay between message segments (seconds)
-    typing_delay_max: float = 1.5  # Maximum delay between message segments (seconds)
-
-    # Voice functionality
-    voice_enabled: bool = False  # Enable voice features
-    voice_mode: Literal["both", "receive_only", "send_only"] = "both"  # Voice mode
-    asr_enabled: bool = True  # Auto transcribe received voice messages
-    asr_fallback_text: str = "[语音消息]"  # Fallback text when ASR fails
-    tts_enabled: bool = False  # Send responses as voice (default off)
-    tts_voice: str = ""  # TTS voice name (empty = use global config)
-    tts_language: str = "Auto"  # TTS language
-
-
-
-
 class ChannelsConfig(Base):
     """Configuration for chat channels.
 
@@ -254,18 +24,6 @@ class ChannelsConfig(Base):
 
     send_progress: bool = True  # stream agent's text progress to the channel
     send_tool_hints: bool = False  # stream tool-call hints (e.g. read_file("…"))
-    whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
-    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
-    discord: DiscordConfig = Field(default_factory=DiscordConfig)
-    feishu: FeishuConfig = Field(default_factory=FeishuConfig)
-    mochat: MochatConfig = Field(default_factory=MochatConfig)
-    dingtalk: DingTalkConfig = Field(default_factory=DingTalkConfig)
-    email: EmailConfig = Field(default_factory=EmailConfig)
-    slack: SlackConfig = Field(default_factory=SlackConfig)
-    qq: QQConfig = Field(default_factory=QQConfig)
-    matrix: MatrixConfig = Field(default_factory=MatrixConfig)
-    wecom: WecomConfig = Field(default_factory=WecomConfig)
-    napcat: NapCatConfig = Field(default_factory=NapCatConfig)
 
 
 class AgentDefaults(Base):
@@ -280,14 +38,7 @@ class AgentDefaults(Base):
     context_window_tokens: int = 65_536
     temperature: float = 0.1
     max_tool_iterations: int = 40
-    # Deprecated compatibility field: accepted from old configs but ignored at runtime.
-    memory_window: int | None = Field(default=None, exclude=True)
-    reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
-
-    @property
-    def should_warn_deprecated_memory_window(self) -> bool:
-        """Return True when old memoryWindow is present without contextWindowTokens."""
-        return self.memory_window is not None and "context_window_tokens" not in self.model_fields_set
+    reasoning_effort: str | None = None  # low / medium / high - enables LLM thinking mode
 
 
 class AgentsConfig(Base):
@@ -327,8 +78,8 @@ class ProvidersConfig(Base):
     volcengine_coding_plan: ProviderConfig = Field(default_factory=ProviderConfig)  # VolcEngine Coding Plan
     byteplus: ProviderConfig = Field(default_factory=ProviderConfig)  # BytePlus (VolcEngine international)
     byteplus_coding_plan: ProviderConfig = Field(default_factory=ProviderConfig)  # BytePlus Coding Plan
-    openai_codex: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenAI Codex (OAuth)
-    github_copilot: ProviderConfig = Field(default_factory=ProviderConfig)  # Github Copilot (OAuth)
+    openai_codex: ProviderConfig = Field(default_factory=ProviderConfig, exclude=True)  # OpenAI Codex (OAuth)
+    github_copilot: ProviderConfig = Field(default_factory=ProviderConfig, exclude=True)  # Github Copilot (OAuth)
 
 
 class HeartbeatConfig(Base):
@@ -367,9 +118,9 @@ class WebToolsConfig(Base):
 class ExecToolConfig(Base):
     """Shell exec tool configuration."""
 
+    enable: bool = True
     timeout: int = 60
     path_append: str = ""
-
 
 class MCPServerConfig(Base):
     """MCP server connection configuration (stdio or HTTP)."""
@@ -392,86 +143,6 @@ class ToolsConfig(Base):
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
-class TTSConfig(Base):
-    """TTS configuration."""
-
-    enabled: bool = False
-    provider: str = "qwen_tts"  # qwen_tts, edge_tts, openai_tts
-    voice: str = "longxiaochun"  # Default voice
-    language: str = "Auto"
-    model_path: str = ""  # Local model path or model name for OpenAI
-    api_key: str = ""  # API key (if using cloud)
-    api_base: str = ""  # API base URL for OpenAI-compatible services
-
-
-class ASRConfig(Base):
-    """ASR configuration."""
-
-    enabled: bool = False
-    provider: str = "qwen_asr"  # qwen_asr, groq_whisper, openai_asr
-    language: str | None = None  # Force language (None=auto-detect)
-    model_path: str = ""  # Local model path or model name for OpenAI
-    api_key: str = ""  # API key (if using cloud)
-    api_base: str = ""  # API base URL for OpenAI-compatible services
-
-
-class VoiceConfig(Base):
-    """Voice configuration."""
-
-    tts: TTSConfig = Field(default_factory=TTSConfig)
-    asr: ASRConfig = Field(default_factory=ASRConfig)
-    python_path: str = ""  # Path to Python executable in conda env (e.g., /path/to/conda/envs/voice/bin/python)
-
-
-class ImageConfig(Base):
-    """Image generation configuration."""
-
-    enabled: bool = False
-    provider: str = "openai"  # openai, dashscope, doubao
-    model: str = ""  # dall-e-3, wanx-v1, doubao-seedream-4-5-251128
-    api_key: str = ""
-    api_base: str = ""  # Optional custom API base URL
-    default_size: str = "1024x1024"
-
-
-class LoggingConfig(Base):
-    """日志配置（简化版）"""
-
-    enabled: bool = True
-    level: str = "INFO"  # 最低日志级别：DEBUG, INFO, WARNING, ERROR
-    rotation: str = "00:00"  # 每天午夜轮转
-    retention: str = "30 days"  # 保留 30 天
-    max_size: str = "100 MB"  # 单文件最大 100MB
-    compression: str = "zip"  # 压缩格式（zip/gz/tar.gz）
-    sanitize_secrets: bool = True  # 脱敏敏感信息
-    show_console: bool = True  # 是否同时输出到终端
-
-
-class VikingConfig(Base):
-    """OpenViking integration configuration."""
-
-    enabled: bool = False
-    mode: Literal["local", "remote"] = "remote"
-
-    # Local mode: 自动启动 openviking-server
-    config_path: str = "~/.openviking/ov.conf"
-
-    # Remote mode: 连接到远程服务器
-    base_url: str = "http://localhost:1933"
-    api_key: str = ""
-
-    # 功能开关
-    auto_recall: bool = True  # 自动语义检索
-    auto_capture: bool = True  # 自动同步记忆
-
-    # 检索参数
-    max_search_results: int = 5
-    search_timeout: float = 5.0
-
-    # 用户命名空间
-    target_uri_template: str = "viking://user_{user_id}/memories"
-
-
 class Config(BaseSettings):
     """Root configuration for nanobot."""
 
@@ -480,10 +151,6 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
-    voice: VoiceConfig = Field(default_factory=VoiceConfig)
-    image: ImageConfig = Field(default_factory=ImageConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    viking: VikingConfig = Field(default_factory=VikingConfig)
 
     @property
     def workspace_path(self) -> Path:
@@ -582,3 +249,5 @@ class Config(BaseSettings):
             if spec and (spec.is_gateway or spec.is_local) and spec.default_api_base:
                 return spec.default_api_base
         return None
+
+    model_config = ConfigDict(env_prefix="NANOBOT_", env_nested_delimiter="__")
